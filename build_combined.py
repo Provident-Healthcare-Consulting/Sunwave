@@ -2,7 +2,7 @@ import json, math, os, pandas as pd
 from datetime import datetime, timezone
 
 # ── Load general report data ──────────────────────────────────────────────────
-with open('report_data.json', 'r') as f:
+with open('report_data.json', 'r', encoding='utf-8') as f:
     raw_data = json.load(f)
 
 DATE_FIELDS = {
@@ -792,10 +792,10 @@ JS = r"""
 const BUILD_INFO = (function(){try{return JSON.parse(document.getElementById('buildInfo').textContent);}catch(e){return{};}})();
 
 /* ===== Data ===== */
-const RAW      = JSON.parse(document.getElementById('generalData').textContent);
-const DATE_IDX = JSON.parse(document.getElementById('dateIdx').textContent);
-const BROWS    = JSON.parse(document.getElementById('billingData').textContent);
-const SHEETS   = Object.keys(RAW);
+let RAW      = JSON.parse(document.getElementById('generalData').textContent);
+let DATE_IDX = JSON.parse(document.getElementById('dateIdx').textContent);
+let BROWS    = JSON.parse(document.getElementById('billingData').textContent);
+let SHEETS   = Object.keys(RAW);
 
 /* ===== Navigation state ===== */
 let curPage = 'billing';
@@ -1447,7 +1447,7 @@ SHEETS.forEach(s=>{
 /* ═══════════════════════════════════════════════════════════════
    CENSUS LOGIC
 ═══════════════════════════════════════════════════════════════ */
-const CROWS = JSON.parse(document.getElementById('censusData').textContent);
+let CROWS = JSON.parse(document.getElementById('censusData').textContent);
 
 // Active census: patients who were active on date D
 function cActive(rows, D) {
@@ -1691,7 +1691,7 @@ function renderCensusBreakdowns(){
 /* ═══════════════════════════════════════════════════════════════
    MARKETING LOGIC
 ═══════════════════════════════════════════════════════════════ */
-const OROWS = JSON.parse(document.getElementById('oppData').textContent);
+let OROWS = JSON.parse(document.getElementById('oppData').textContent);
 
 function mFilter(rows,from,to){return rows.filter(r=>{const d=pd(r.co);return d&&d>=from&&d<=to;});}
 function mMetrics(rows){
@@ -1842,7 +1842,7 @@ function renderMarketingDetail(){
 /* ═══════════════════════════════════════════════════════════════
    OPPORTUNITIES DETAIL LOGIC
 ═══════════════════════════════════════════════════════════════ */
-const TLROWS = JSON.parse(document.getElementById('tlData').textContent);
+let TLROWS = JSON.parse(document.getElementById('tlData').textContent);
 // Index timeline by opportunity_id for fast lookup
 const TL_BY_OID = (function(){
   const m={};
@@ -2083,7 +2083,7 @@ function renderReferrals(){
 /* ═══════════════════════════════════════════════════════════════
    CRM TASK LOGIC
 ═══════════════════════════════════════════════════════════════ */
-const CTROWS = JSON.parse(document.getElementById('crmTaskData').textContent);
+let CTROWS = JSON.parse(document.getElementById('crmTaskData').textContent);
 let ctNavView='all', ctNavDate=null, ctSearch='', ctStatus='', ctType='', ctAssoc='';
 const ctExpanded = new Set();
 for(const r of CTROWS){const d=pd(r.activity);if(d){ctNavDate=d;break;}}
@@ -2243,7 +2243,7 @@ function renderCRMTask(){
 /* ═══════════════════════════════════════════════════════════════
    UTILIZATION REVIEW LOGIC
 ═══════════════════════════════════════════════════════════════ */
-const AROWS = JSON.parse(document.getElementById('authData').textContent);
+let AROWS = JSON.parse(document.getElementById('authData').textContent);
 
 function aFilter(rows,from,to){return rows.filter(r=>{const d=pd(r.adm);return d&&d>=from&&d<=to;});}
 function aMetrics(rows){
@@ -2323,7 +2323,7 @@ function renderURTrend(){
 /* ═══════════════════════════════════════════════════════════════
    CLINICAL LOGIC
 ═══════════════════════════════════════════════════════════════ */
-const GNROWS = JSON.parse(document.getElementById('gnData').textContent);
+let GNROWS = JSON.parse(document.getElementById('gnData').textContent);
 
 function gnFilter(rows,from,to){return rows.filter(r=>{const d=pd(r.date);return d&&d>=from&&d<=to;});}
 
@@ -2408,7 +2408,7 @@ function renderClinical(){
 /* ═══════════════════════════════════════════════════════════════
    OPERATIONS LOGIC
 ═══════════════════════════════════════════════════════════════ */
-const OPROWS2 = JSON.parse(document.getElementById('opsData').textContent);
+let OPROWS2 = JSON.parse(document.getElementById('opsData').textContent);
 
 function renderOpsHeatmap(){
   const from=daysAgo(89);
@@ -3153,7 +3153,28 @@ BG_REFRESH = ("""
       ops_rows: map(sheets,'Census_Admitted',(r,i)=>({date:xDate(r[i('Admission Date')]),hour:hr(r[i('Admission Time')]),dow:dow(r[i('Admission Date')]),rep:xS(r[i('Admissions Rep')]),therapist:xS(r[i('Assigned Therapist')]),ins:xS(r[i('Insurance Name')]),loc:xS(r[i('Admission Level Of Care')]),name:xS(r[i('Patient Name')])})),
       gn_rows: map(sheets,'GroupNotes',(r,i)=>({date:xDate(r[i('session_date')]),title:xS(r[i('group_title')]),status:xS(r[i('status')]),mins:Math.round(parseFloat(r[i('length_time')])||0)})),
       timeline_rows: map(sheets,'Timeline',(r,i)=>({oid:xS(r[i('opportunity_id')]),date:xDT(r[i('activity_date')]),subject:xS(r[i('task_subject')]),type:xS(r[i('type')]),by:xS(r[i('created_by_name')]),wf:xS(r[i('workflow_status')]),text:xS(r[i('text')]),sortKey:typeof r[i('activity_date')]==='number'?r[i('activity_date')]:0})),
+      crm_rows: map(sheets,'CRM Task',(r,i)=>({id:xS(r[i('id')]),aid:xS(r[i('Associated_id')]),assoc:xS(r[i('associated_with')]),subject:xS(r[i('task_subject')]),type:xS(r[i('type')]),task_type:xS(r[i('task_type')]),status:xS(r[i('task_status')]),created_by:xS(r[i('created_by_name')]),assigned:xS(r[i('assigned_to_name')]),text:xS(r[i('text')]),activity:typeof r[i('activity_date')]==='number'?xDT(r[i('activity_date')]):xS(r[i('activity_date')]),due:typeof r[i('task_due_date')]==='number'?xDT(r[i('task_due_date')]):xS(r[i('task_due_date')]),reminder:typeof r[i('reminder_date_time')]==='number'?xDT(r[i('reminder_date_time')]):xS(r[i('reminder_date_time')]),sortKey:typeof r[i('activity_date')]==='number'?r[i('activity_date')]:0})),
     };
+  }
+
+  function applyLiveData(data){
+    // Update module-level data variables so all render functions use fresh data
+    if(data.raw_data)     RAW      = data.raw_data;
+    if(data.tab_config)   DATE_IDX = data.tab_config;
+    if(data.billing_rows) BROWS    = data.billing_rows;
+    if(data.census_rows)  CROWS    = data.census_rows;
+    if(data.opp_rows)     { OROWS = data.opp_rows; TLROWS = data.timeline_rows||TLROWS; }
+    if(data.auth_rows)    AROWS    = data.auth_rows;
+    if(data.gn_rows)      GNROWS   = data.gn_rows;
+    if(data.ops_rows)     OPROWS2  = data.ops_rows;
+    if(data.crm_rows)     CTROWS   = data.crm_rows;
+    SHEETS = Object.keys(RAW);
+    // Re-initialize bNavDate from fresh billing data
+    if(data.billing_rows && data.billing_rows.length){
+      for(const r of BROWS){ const d=pd(r.deposit_date); if(d){if(!bNavDate||d>bNavDate)bNavDate=d;break;} }
+    }
+    // Re-render the currently visible tab
+    doRefresh();
   }
 
   async function bgRefresh(){
@@ -3191,7 +3212,9 @@ BG_REFRESH = ("""
       const data = transform(sheets);
       const _ts = Date.now();
       localStorage.setItem('sunwave_data_v3', JSON.stringify({v:3, ts: _ts, data}));
-      console.log('[bg refresh] cache updated');
+      console.log('[bg refresh] cache updated — applying live data');
+      // Apply fresh data immediately (no reload needed)
+      applyLiveData(data);
       // Update the displayed sync timestamp on all tabs
       const _sub = document.getElementById('pageSub');
       if(_sub && typeof fmtSyncedAt === 'function') _sub.textContent = fmtSyncedAt(_ts);
@@ -3286,5 +3309,5 @@ _redirect = (
 )
 with open('index.html', 'w', encoding='utf-8') as _f:
     _f.write(_redirect)
-print('  index.html  (redirect → billing/)')
+print('  index.html  (redirect -> billing/)')
 print('Sub-pages done.')
