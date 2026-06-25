@@ -101,9 +101,58 @@ html,body{height:100%;background:#fff;color:var(--text);font-family:'DM Sans',-a
 .roadmap-item .rsub{font-size:11px;color:var(--muted);margin-bottom:5px}
 .roadmap-item .rneed{font-size:11px;color:#92400e;font-family:'Space Mono',monospace}
 </style>
+<<<<<<< Updated upstream
 </head>
 <body>
 
+=======
+<style>
+#_auth-overlay{position:fixed;inset:0;z-index:9999;background:linear-gradient(135deg,#0a3d5c 0%,#1a6a8a 100%);display:flex;align-items:center;justify-content:center}
+#_auth-overlay.hidden{display:none!important}
+._auth-card{background:#fff;border-radius:16px;padding:44px 40px 36px;width:400px;max-width:92vw;box-shadow:0 24px 64px rgba(0,0,0,.3);text-align:center}
+._auth-logo{font-family:'Space Mono',monospace;font-size:12px;font-weight:700;color:#0a3d5c;letter-spacing:.15em;margin-bottom:4px}
+._auth-sub{font-size:12px;color:#6b7e96;margin-bottom:28px}
+._auth-title{font-size:17px;font-weight:700;color:#2D2D2D;margin-bottom:8px}
+._auth-desc{font-size:13px;color:#6b7e96;margin-bottom:26px;line-height:1.6}
+._auth-btn{display:flex;align-items:center;justify-content:center;gap:10px;width:100%;padding:13px 18px;border:1.5px solid #e2e8f0;border-radius:9px;background:#fff;font-size:14px;font-weight:600;color:#2D2D2D;cursor:pointer;transition:all .15s;font-family:inherit}
+._auth-btn:hover{border-color:#4BBDE8;box-shadow:0 4px 16px rgba(75,189,232,.2)}
+._auth-btn:active{transform:scale(.98)}
+._auth-err{background:#fee2e2;color:#dc2626;border:1px solid #fca5a5;border-radius:8px;padding:10px 14px;font-size:12px;font-weight:600;margin-bottom:16px;display:none;text-align:left}
+._auth-spin{display:none;justify-content:center;margin-bottom:16px}
+._auth-spin span{width:8px;height:8px;border-radius:50%;background:#4BBDE8;display:inline-block;margin:0 3px;animation:_sp .8s infinite alternate}
+._auth-spin span:nth-child(2){animation-delay:.2s}._auth-spin span:nth-child(3){animation-delay:.4s}
+@keyframes _sp{0%{opacity:.25;transform:scale(.7)}100%{opacity:1;transform:scale(1)}}
+._auth-footer{margin-top:20px;font-size:11px;color:#94a3b8}
+._auth-user{font-family:'Space Mono',monospace;font-size:10px;color:rgba(255,255,255,.75);display:none;align-items:center;gap:8px}
+._auth-user button{background:none;border:1px solid rgba(255,255,255,.3);color:rgba(255,255,255,.65);border-radius:4px;padding:2px 7px;font-size:10px;cursor:pointer;font-family:inherit}
+._auth-user button:hover{border-color:#fff;color:#fff}
+</style>
+<script>(function(){var k='_suv1';try{var s=sessionStorage.getItem(k);if(s){var u=JSON.parse(s);if(u&&u.e&&(Date.now()-u.t)<43200000){document.documentElement.setAttribute('data-auth','1');return;}}}catch(e){}document.documentElement.style.visibility='hidden';})();</script>
+</head>
+<body>
+
+<div id="_auth-overlay">
+  <div class="_auth-card">
+    <div class="_auth-logo">STRIVE UR</div>
+    <div class="_auth-sub">Provident Healthcare Consulting</div>
+    <div class="_auth-title">Sign in to continue</div>
+    <p class="_auth-desc">Use your work Microsoft 365 account<br>(the same one you use for Outlook).</p>
+    <div class="_auth-err" id="_auth-err"></div>
+    <div class="_auth-spin" id="_auth-spin"><span></span><span></span><span></span></div>
+    <button class="_auth-btn" id="_auth-btn" onclick="_authLogin()">
+      <svg width="20" height="20" viewBox="0 0 21 21" xmlns="http://www.w3.org/2000/svg" style="flex-shrink:0">
+        <rect x="1" y="1" width="9" height="9" fill="#f25022"/>
+        <rect x="11" y="1" width="9" height="9" fill="#7fba00"/>
+        <rect x="1" y="11" width="9" height="9" fill="#00a4ef"/>
+        <rect x="11" y="11" width="9" height="9" fill="#ffb900"/>
+      </svg>
+      Sign in with Microsoft
+    </button>
+    <div class="_auth-footer">Provident Healthcare &middot; restricted to org members</div>
+  </div>
+</div>
+
+>>>>>>> Stashed changes
 <header class="app-header">
   <div class="app-title">
     <span class="brand-badge">STRIVE</span>
@@ -115,6 +164,10 @@ html,body{height:100%;background:#fff;color:var(--text);font-family:'DM Sans',-a
   <div class="app-meta">
     <span class="live">LIVE</span>
     <span id="syncedTs">—</span>
+<<<<<<< Updated upstream
+=======
+    <div class="_auth-user" id="_auth-user"><span id="_auth-uname"></span><button onclick="_authSignOut()">Sign out</button></div>
+>>>>>>> Stashed changes
     <button class="refresh-btn" onclick="window.location.replace(window.location.pathname + '?_v=' + Date.now())">↻ Refresh</button>
   </div>
 </header>
@@ -495,5 +548,54 @@ if (META.refreshed_human){
 populateFilters();
 buildOverview();
 </script>
+<<<<<<< Updated upstream
+=======
+<script src="https://cdn.jsdelivr.net/npm/@azure/msal-browser@3.10.0/lib/msal-browser.min.js"></script>
+<script>
+(function(){
+var _ALLOWED=['striverecovery.com','providenthcc.com','gshealthcarellc.com'];
+var _KEY='_suv1';
+var _SCOPES=['openid','profile','email','User.Read'];
+var _cfg={auth:{clientId:'debd63be-2397-4d6e-adb1-381574e7352b',authority:'https://login.microsoftonline.com/063ab74f-56d1-429a-b96d-a24a572025de',redirectUri:window.location.origin+window.location.pathname},cache:{cacheLocation:'localStorage'}};
+var _inst=null;
+function _gi(){if(_inst)return Promise.resolve(_inst);_inst=new msal.PublicClientApplication(_cfg);var p=typeof _inst.initialize==='function'?_inst.initialize():Promise.resolve();return p.then(function(){return _inst;});}
+window._authLogin=function(){
+  _sp(true);
+  _gi().then(function(i){return i.ssoSilent({scopes:_SCOPES}).catch(function(){return i.loginPopup({scopes:_SCOPES});});})
+  .then(function(r){_ok((r.account.username||'').toLowerCase(),r.account.name||r.account.username);})
+  .catch(function(e){_sp(false);if(e&&e.errorCode!=='user_cancelled')_er('Sign-in failed: '+(e.message||e.errorCode||'unknown'));console.error('[auth]',e);});
+};
+function _ok(email,name){
+  var dom=(email.split('@')[1]||'').toLowerCase();
+  if(!_ALLOWED.includes(dom)){_sp(false);_er('Access denied. Only striverecovery.com, providenthcc.com and gshealthcarellc.com accounts are allowed.');return;}
+  sessionStorage.setItem(_KEY,JSON.stringify({e:email,n:name,t:Date.now()}));
+  _show(email,name);
+}
+function _show(email,name){
+  document.documentElement.style.visibility='';
+  document.getElementById('_auth-overlay').classList.add('hidden');
+  var u=document.getElementById('_auth-user'),n=document.getElementById('_auth-uname');
+  if(u&&n){n.textContent=(name||email);u.style.display='flex';}
+}
+window._authSignOut=function(){
+  sessionStorage.removeItem(_KEY);
+  document.getElementById('_auth-overlay').classList.remove('hidden');
+  var u=document.getElementById('_auth-user');if(u)u.style.display='none';
+  _gi().then(function(i){return i.logoutPopup();}).catch(function(){});
+};
+function _er(m){var e=document.getElementById('_auth-err');if(e){e.textContent=m;e.style.display='block';}}
+function _sp(on){var s=document.getElementById('_auth-spin'),b=document.getElementById('_auth-btn');if(s)s.style.display=on?'flex':'none';if(b)b.style.display=on?'none':'flex';}
+window.addEventListener('DOMContentLoaded',function(){
+  if(document.documentElement.getAttribute('data-auth')==='1'){
+    var s=sessionStorage.getItem(_KEY);if(s){try{var u=JSON.parse(s);_show(u.e,u.n||u.e);return;}catch(e){}}
+  }
+  document.documentElement.style.visibility='';
+  _gi().then(function(i){return i.handleRedirectPromise();}).then(function(r){
+    if(r&&r.account)_ok((r.account.username||'').toLowerCase(),r.account.name||r.account.username);
+  }).catch(function(e){console.warn('[auth redirect]',e);});
+});
+})();
+</script>
+>>>>>>> Stashed changes
 </body>
 </html>

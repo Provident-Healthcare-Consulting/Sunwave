@@ -151,7 +151,8 @@ print(f'[UR] {len(gnotes)} group-note rows')
 now = datetime.now(timezone.utc)
 meta = {
     'refreshed_at': now.isoformat(),
-    'refreshed_human': now.strftime('%A, %B %-d, %Y · %-I:%M %p UTC'),
+    'refreshed_human': now.strftime('%A, %B {d}, %Y · {t} UTC').format(
+        d=now.day, t=now.strftime('%I:%M %p').lstrip('0')),
     'total_auths':  len(auths),
     'total_census': len(census),
     'total_groupnotes': len(gnotes),
