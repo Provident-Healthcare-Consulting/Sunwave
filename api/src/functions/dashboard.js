@@ -91,26 +91,26 @@ app.http('dashboard-crm', {
   handler: async (request, context) => {
     try {
       const [oppsResult, tlResult] = await Promise.all([
-        query('SELECT * FROM dbo.vw_excel_opportunities_by_created_date'),
-        query('SELECT * FROM dbo.vw_excel_timeline'),
+        query('SELECT * FROM dbo.sunwave_opportunities'),
+        query('SELECT * FROM dbo.crm_timeline'),
       ]);
 
       const opps = oppsResult.recordset.map(r => {
-        const oid = safe(r.opportunity_id || r.opportunity_legacy_id || r.id);
+        const oid = safe(r.opportunity_id || r.opportunity_legacy_id);
         if (!oid) return null;
         return {
           id: oid,
-          name: safe(r['patient name'] || r['Patient Name']),
+          name: safe(r.patient_name),
           co: fmtDateTime(r.created_on),
           admit: fmtDateTime(r.admission_date),
-          outcome: safe(r.outcome),
+          outcome: safe(r.status),
           stage: safe(r.stage),
           loc: safe(r.level_of_care),
-          ins: safe(r['insurance provider']),
-          ref: safe(r['referral name']),
-          lost_r: safe(r['lost reason']),
-          aband_r: safe(r['abandoned reason']),
-          rep: safe(r['adm. representative']),
+          ins: safe(r.insurance_name),
+          ref: safe(r.referral_source),
+          lost_r: safe(r.lost_reason),
+          aband_r: safe(r.abandoned_reason),
+          rep: safe(r.assigned_to),
         };
       }).filter(Boolean);
 
@@ -119,23 +119,23 @@ app.http('dashboard-crm', {
       const tasks = [];
 
       for (const r of tlResult.recordset) {
-        const oid = safe(r.opportunity_id) || safe(r.associated_with_id);
-        const typ = safe(r.type);
+        const oid = safe(r.opportunity_id) || safe(r.source_id);
+        const typ = safe(r.activity_type);
         if (!oid && !typ) continue;
 
         const by = safe(r.created_by_name);
-        const assigned = safe(r.assigned_to_name);
+        const assigned = safe(r.assigned_to);
 
         acts.push({
           oid,
-          aid: safe(r.id),
+          aid: safe(r.sunwave_timeline_id),
           type: typ,
           subj: safe(r.task_subject).slice(0, 140),
-          text: safe(r.text).slice(0, 400),
+          text: safe(r.description).slice(0, 400),
           by,
           wf: safe(r.workflow_status),
           date: fmtDateTime(r.activity_date),
-          assoc: safe(r.associated_with),
+          assoc: safe(r.source_type),
           task_type: safe(r.task_type),
           task_status: safe(r.task_status),
           task_due_date: fmtDateTime(r.task_due_date),
@@ -154,15 +154,15 @@ app.http('dashboard-crm', {
           const status = safe(r.task_status).toLowerCase();
           const isOpen = ['open', 'pending', ''].includes(status) && !['completed', 'closed', 'cancelled'].includes(status);
           tasks.push({
-            id: safe(r.id),
-            aid: safe(r.associated_with_id || r.opportunity_id),
-            assoc: safe(r.associated_with),
+            id: safe(r.sunwave_timeline_id),
+            aid: safe(r.source_id || r.opportunity_id),
+            assoc: safe(r.source_type),
             subject: safe(r.task_subject),
             task_type: safe(r.task_type),
             status: safe(r.task_status),
             created_by: by,
             assigned,
-            text: safe(r.text).slice(0, 400),
+            text: safe(r.description).slice(0, 400),
             due: fmtDateTime(r.task_due_date),
             created: fmtDateTime(r.created_on),
             reminder: fmtDateTime(r.reminder_date_time),
