@@ -409,12 +409,18 @@ async function authBoot(){
 if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', authBoot);
 else authBoot();
 
-// ── DATA — replaced by build_crm.py ────────────────────────────────────────
-var OPPS  = /*INJECT_OPPS*/null;
-var ACTS  = /*INJECT_ACTS*/null;
-var USERS = /*INJECT_USERS*/null;
-var TASKS = /*INJECT_TASKS*/null;
-var META  = /*INJECT_META*/null;
+// ── DATA — loaded from API at runtime ──────────────────────────────────────
+var OPPS  = [];
+var ACTS  = [];
+var USERS = [];
+var TASKS = [];
+var META  = {};
+
+var _dataReady = fetch('/api/dashboard/crm')
+  .then(function(r) { if (!r.ok) throw new Error('API ' + r.status); return r.json(); })
+  .then(function(d) { OPPS = d.opps; ACTS = d.acts; USERS = d.users; TASKS = d.tasks; META = d.meta; })
+  .catch(function(e) { console.error('Failed to load CRM data:', e); })
+  .then(function() { if (typeof _onDataReady === 'function') _onDataReady(); });
 // CTM call counts per user, per time bucket.
 // Shape: { 'User Name': { inbound: { '2026-W18': 23, ... }, outbound: { '2026-W18': 18, ... }, total: 41 }, ... }
 // Wire this up in build_crm.py by fetching from the Strive CTM pipeline and aggregating by agent name.
@@ -1108,9 +1114,9 @@ function rebuildAll() {
   if (active) buildTab(active.dataset.tab);
 }
 
-// Populate user select with activity counts
-(function() {
+function _populateUI() {
   var sel = document.getElementById('userSel');
+  sel.innerHTML = '<option value="">All Users</option>';
   var counts = {};
   ACTS.forEach(function(a){ if (a.by && isHuman(a)) counts[a.by] = (counts[a.by]||0)+1; });
   var sorted = Object.keys(counts).sort(function(a,b){ return counts[b]-counts[a]; });
@@ -1118,16 +1124,17 @@ function rebuildAll() {
     var o = document.createElement('option'); o.value = n; o.textContent = n+' ('+counts[n]+')';
     sel.appendChild(o);
   });
-})();
-
-// Populate sync label
-(function(){
   if (META && META.refreshed_at) {
     var d = new Date(META.refreshed_at);
     document.getElementById('syncLbl').textContent = 'synced ' + d.toLocaleString();
   }
   document.getElementById('footer').innerHTML = META ? (META.opps_count + ' opportunities · ' + META.acts_count + ' activities · ' + META.users_count + ' users · ' + META.tasks_count + ' tasks') : '';
-})();
+}
+
+function _onDataReady() {
+  _populateUI();
+  rebuildAll();
+}
 
 // ──────────────────────────────────────────────────────────────────
 // OVERVIEW
