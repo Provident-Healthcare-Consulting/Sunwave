@@ -15,6 +15,7 @@ Browser → /crm/index.html → fetch /api/dashboard/crm → strive-ur-api (Azur
                                                      │ crm_timeline          │
                                                      └──────────────────────┘
 ```
+<img width="1502" height="1360" alt="image" src="https://github.com/user-attachments/assets/84c953dd-60c4-4dc0-a692-ac354f3797dc" />
 
 ## Data Sources
 
