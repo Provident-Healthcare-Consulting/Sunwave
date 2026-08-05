@@ -1,9 +1,13 @@
 import json, math, os, pandas as pd
 from datetime import datetime, timezone
+from db import get_connection
 
 # ── Load general report data ──────────────────────────────────────────────────
 with open('report_data.json', 'r', encoding='utf-8') as f:
     raw_data = json.load(f)
+
+conn = get_connection()
+print('[Combined] Connected to SQL database')
 
 DATE_FIELDS = {
     'Census': 'Admission Date', 'Census Active': 'Admission Date',
@@ -23,7 +27,8 @@ for sheet, info in raw_data.items():
     tab_config[sheet] = info['columns'].index(dc) if dc and dc in info['columns'] else -1
 
 # ── Load billing data ─────────────────────────────────────────────────────────
-df = pd.read_excel('MASTER_Sunwave_New_PowerQuerry.xlsx', sheet_name='Payment Report Deposit Date')
+print('[Combined] Loading Payment Report Deposit Date from SQL...')
+df = pd.read_sql('SELECT * FROM dbo.vw_excel_payment_report_deposit_date', conn)
 df['deposit_date'] = pd.to_datetime(df['deposit_date'], errors='coerce')
 for c in ['line_charge_amount','line_paid_amount','line_adjusted','line_allocated_amount','line_allowed']:
     df[c] = pd.to_numeric(df[c], errors='coerce').fillna(0)
@@ -48,7 +53,8 @@ for _, r in df.iterrows():
     })
 
 # ── Load census data ─────────────────────────────────────────────────────────
-cdf = pd.read_excel('MASTER_Sunwave_New_PowerQuerry.xlsx', sheet_name='Census')
+print('[Combined] Loading Census from SQL...')
+cdf = pd.read_sql('SELECT * FROM dbo.vw_excel_census', conn)
 cdf['Admission Date'] = pd.to_datetime(cdf['Admission Date'], errors='coerce')
 cdf['Discharge Date'] = pd.to_datetime(cdf['Discharge Date'], errors='coerce')
 cdf['Age']            = pd.to_numeric(cdf['Age'], errors='coerce')
@@ -72,7 +78,8 @@ for _, r in cdf.iterrows():
     })
 
 # ── Opportunities data (Marketing + Opportunities sections) ──────────────────
-odf = pd.read_excel('MASTER_Sunwave_New_PowerQuerry.xlsx', sheet_name='Opportunities by Created Date')
+print('[Combined] Loading Opportunities by Created Date from SQL...')
+odf = pd.read_sql('SELECT * FROM dbo.vw_excel_opportunities_by_created_date', conn)
 odf['created_on']    = pd.to_datetime(odf['created_on'],    errors='coerce')
 odf['admission_date']= pd.to_datetime(odf['admission_date'],errors='coerce')
 opp_rows = []
@@ -94,7 +101,8 @@ for _, r in odf.iterrows():
     })
 
 # ── Timeline data (Opportunity expand/collapse) ──────────────────────────────
-tldf = pd.read_excel('MASTER_Sunwave_New_PowerQuerry.xlsx', sheet_name='Timeline')
+print('[Combined] Loading Timeline from SQL...')
+tldf = pd.read_sql('SELECT * FROM dbo.vw_excel_timeline', conn)
 tldf['activity_date'] = pd.to_datetime(tldf['activity_date'], errors='coerce')
 timeline_rows = []
 for _, r in tldf.iterrows():
@@ -112,7 +120,8 @@ for _, r in tldf.iterrows():
     })
 
 # ── Report Auth data (Utilization Review) ────────────────────────────────────
-adf = pd.read_excel('MASTER_Sunwave_New_PowerQuerry.xlsx', sheet_name='Report Auth')
+print('[Combined] Loading Report Auth from SQL...')
+adf = pd.read_sql('SELECT * FROM dbo.vw_excel_report_auth', conn)
 adf['admission_date']  = pd.to_datetime(adf['admission_date'],  errors='coerce')
 adf['next_review_date']= pd.to_datetime(adf['next_review_date'],errors='coerce')
 for c in ['authorized_units','billed_units_total']:
@@ -133,7 +142,8 @@ for _, r in adf.iterrows():
     })
 
 # ── Census_Admitted data (Operations) ────────────────────────────────────────
-opdf = pd.read_excel('MASTER_Sunwave_New_PowerQuerry.xlsx', sheet_name='Census_Admitted')
+print('[Combined] Loading Census_Admitted from SQL...')
+opdf = pd.read_sql('SELECT * FROM dbo.vw_excel_census_admitted', conn)
 opdf['Admission Date'] = pd.to_datetime(opdf['Admission Date'], errors='coerce')
 ops_rows = []
 for _, r in opdf.iterrows():
@@ -153,7 +163,8 @@ for _, r in opdf.iterrows():
     })
 
 # ── GroupNotes data (Clinical) ───────────────────────────────────────────────
-gndf = pd.read_excel('MASTER_Sunwave_New_PowerQuerry.xlsx', sheet_name='GroupNotes')
+print('[Combined] Loading GroupNotes from SQL...')
+gndf = pd.read_sql('SELECT * FROM dbo.vw_excel_group_notes', conn)
 gndf['session_date'] = pd.to_datetime(gndf['session_date'], errors='coerce')
 gndf['length_time']  = pd.to_numeric(gndf['length_time'],  errors='coerce').fillna(0)
 gnotes_rows = []
@@ -168,7 +179,8 @@ for _, r in gndf.iterrows():
 
 # ── CRM Task data ────────────────────────────────────────────────────────────
 try:
-    ctdf = pd.read_excel('MASTER_Sunwave_New_PowerQuerry.xlsx', sheet_name='CRM Task')
+    print('[Combined] Loading CRM Task from SQL...')
+    ctdf = pd.read_sql('SELECT * FROM dbo.vw_excel_crm_task', conn)
     for _c in ['activity_date','task_due_date','reminder_date_time','created_on','orig_activity_date']:
         if _c in ctdf.columns:
             ctdf[_c] = pd.to_datetime(ctdf[_c], errors='coerce')
@@ -201,7 +213,8 @@ except Exception as _e:
 
 # ── Referral Active data ─────────────────────────────────────────────────────
 try:
-    rdf = pd.read_excel('MASTER_Sunwave_New_PowerQuerry.xlsx', sheet_name='Referral Active')
+    print('[Combined] Loading Referral Active from SQL...')
+    rdf = pd.read_sql('SELECT * FROM dbo.vw_excel_referral_active', conn)
     rdf['created_on'] = pd.to_datetime(rdf['created_on'], errors='coerce')
     referral_rows = []
     for _, r in rdf.iterrows():
@@ -220,6 +233,9 @@ try:
 except Exception as _e:
     print(f"Warning: could not load Referral Active sheet: {_e}")
     referral_rows = []
+
+conn.close()
+print('[Combined] All SQL data loaded')
 
 # ── Build metadata ───────────────────────────────────────────────────────────
 build_info_js = json.dumps({'refreshed_at': datetime.now(timezone.utc).isoformat()})

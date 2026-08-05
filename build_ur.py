@@ -1,46 +1,24 @@
 """build_ur.py — generate Sunwave UR Dashboard at ur/index.html.
 
-Reads MASTER_Sunwave_New_PowerQuerry.xlsx (fetched by fetch_excel.py) and
-produces ur/index.html from dashboard_template_ur.html.
+Reads data from SQL views (vw_excel_*) via pyodbc.
 
-UR data sources in the xlsx:
-  - Sheet 'Report Auth'    — patient, admission_date, next_review_date,
-                             authorization_code, authorized_units,
-                             billed_units_total, insurance_provider,
-                             ur_reviewer, service_facility
-  - Sheet 'Census_Admitted' (or 'Census') — active patient roster
-  - Sheet 'GroupNotes'     — group session attendance for cross-ref
+UR data sources:
+  - vw_excel_report_auth      — authorization data
+  - vw_excel_census_admitted   — active patient roster
+  - vw_excel_group_notes       — group session attendance
 """
 import json
 import os
 import math
 import pandas as pd
 from datetime import datetime, timezone
+from db import get_connection
 
-XLSX = 'MASTER_Sunwave_New_PowerQuerry.xlsx'
 TEMPLATE = 'dashboard_template_ur.html'
 OUTPUT = 'ur/index.html'
 
-if not os.path.exists(XLSX):
-    raise SystemExit(f'Source workbook not found: {XLSX}\n'
-                     'Run fetch_excel.py first (requires AZURE_* env vars).')
-
-print(f'[UR] Loading {XLSX}...')
-xl = pd.ExcelFile(XLSX)
-print(f'[UR] Sheets in workbook: {xl.sheet_names}')
-
-# ── Diagnostic: dump the actual column list of every UR-relevant sheet ────
-for sheet_name in ['Report Auth', 'Report UR Changes', 'Census_Admitted', 'Census', 'GroupNotes']:
-    if sheet_name in xl.sheet_names:
-        try:
-            cols = pd.read_excel(XLSX, sheet_name=sheet_name, nrows=0).columns.tolist()
-            print(f'[UR-SCHEMA] {sheet_name} ({len(cols)} columns):')
-            for i, c in enumerate(cols, 1):
-                print(f'[UR-SCHEMA]   {i:3d}. {c}')
-        except Exception as e:
-            print(f'[UR-SCHEMA] {sheet_name} — error: {e}')
-    else:
-        print(f'[UR-SCHEMA] {sheet_name} — NOT IN WORKBOOK')
+conn = get_connection()
+print('[UR] Connected to SQL database')
 
 
 def safe_str(v):
@@ -72,17 +50,10 @@ def fmt_date(v):
     return safe_str(v)
 
 
-def pick_sheet(*names):
-    for n in names:
-        if n in xl.sheet_names:
-            return pd.read_excel(XLSX, sheet_name=n)
-    return None
-
-
 # ── Report Auth ─────────────────────────────────────────────────────────────
-adf = pick_sheet('Report Auth')
-if adf is None:
-    raise SystemExit('Required sheet "Report Auth" not found in workbook.')
+print('[UR] Loading Report Auth from SQL...')
+adf = pd.read_sql('SELECT * FROM dbo.vw_excel_report_auth', conn)
+print(f'  {len(adf)} rows from vw_excel_report_auth')
 
 for col in ('admission_date', 'next_review_date'):
     if col in adf.columns:
@@ -109,43 +80,48 @@ for _, r in adf.iterrows():
         'ins':      safe_str(r.get('insurance_provider')),
         'reviewer': safe_str(r.get('ur_reviewer')),
     })
-
 print(f'[UR] {len(auths)} authorization rows')
 
 # ── Census_Admitted (active patient roster) ─────────────────────────────────
-cdf = pick_sheet('Census_Admitted', 'Census')
+print('[UR] Loading Census Admitted from SQL...')
+cdf = pd.read_sql('SELECT * FROM dbo.vw_excel_census_admitted', conn)
+print(f'  {len(cdf)} rows from vw_excel_census_admitted')
+
 census = []
-if cdf is not None:
-    if 'Admission Date' in cdf.columns:
-        cdf['Admission Date'] = pd.to_datetime(cdf['Admission Date'], errors='coerce')
-    for _, r in cdf.iterrows():
-        census.append({
-            'patient':   safe_str(r.get('Patient Name')),
-            'adm':       fmt_date(r.get('Admission Date')),
-            'loc':       safe_str(r.get('Admission Level Of Care')),
-            'ins':       safe_str(r.get('Insurance Name')),
-            'rep':       safe_str(r.get('Admissions Rep')),
-            'therapist': safe_str(r.get('Assigned Therapist')),
-        })
+if 'Admission Date' in cdf.columns:
+    cdf['Admission Date'] = pd.to_datetime(cdf['Admission Date'], errors='coerce')
+for _, r in cdf.iterrows():
+    census.append({
+        'patient':   safe_str(r.get('Patient Name')),
+        'adm':       fmt_date(r.get('Admission Date')),
+        'loc':       safe_str(r.get('Admission Level Of Care')),
+        'ins':       safe_str(r.get('Insurance Name')),
+        'rep':       safe_str(r.get('Admissions Rep')),
+        'therapist': safe_str(r.get('Assigned Therapist')),
+    })
 print(f'[UR] {len(census)} census rows')
 
 # ── GroupNotes (session attendance) ─────────────────────────────────────────
-gdf = pick_sheet('GroupNotes')
+print('[UR] Loading GroupNotes from SQL...')
+gdf = pd.read_sql('SELECT * FROM dbo.vw_excel_group_notes', conn)
+print(f'  {len(gdf)} rows from vw_excel_group_notes')
+
 gnotes = []
-if gdf is not None:
-    if 'session_date' in gdf.columns:
-        gdf['session_date'] = pd.to_datetime(gdf['session_date'], errors='coerce')
-    if 'length_time' in gdf.columns:
-        gdf['length_time'] = pd.to_numeric(gdf['length_time'], errors='coerce').fillna(0)
-    for _, r in gdf.iterrows():
-        gnotes.append({
-            'patient': safe_str(r.get('patient_name')),
-            'date':    fmt_date(r.get('session_date')),
-            'title':   safe_str(r.get('group_title')),
-            'status':  safe_str(r.get('status')),
-            'mins':    int(safe_num(r.get('length_time'))),
-        })
+if 'session_date' in gdf.columns:
+    gdf['session_date'] = pd.to_datetime(gdf['session_date'], errors='coerce')
+if 'length_time' in gdf.columns:
+    gdf['length_time'] = pd.to_numeric(gdf['length_time'], errors='coerce').fillna(0)
+for _, r in gdf.iterrows():
+    gnotes.append({
+        'patient': safe_str(r.get('patient_name')),
+        'date':    fmt_date(r.get('session_date')),
+        'title':   safe_str(r.get('group_title')),
+        'status':  safe_str(r.get('status')),
+        'mins':    int(safe_num(r.get('length_time'))),
+    })
 print(f'[UR] {len(gnotes)} group-note rows')
+
+conn.close()
 
 # ── Meta / build info ───────────────────────────────────────────────────────
 now = datetime.now(timezone.utc)

@@ -1,10 +1,9 @@
 """build_crm.py — generate Sunwave CRM Dashboard at crm/index.html.
 
-Reads MASTER_Sunwave_New_PowerQuerry.xlsx directly via pandas (bypasses
-report_data.json — guarantees fresh Timeline data on every build).
+Reads data from SQL views (vw_excel_*) via pyodbc.
 
 Inputs:
-  - MASTER_Sunwave_New_PowerQuerry.xlsx  (downloaded by fetch_excel.py first)
+  - SQL views: vw_excel_opportunities_by_created_date, vw_excel_timeline
   - dashboard_template_crm.html
 
 Output:
@@ -16,16 +15,10 @@ import re
 import math
 import pandas as pd
 from datetime import datetime, timezone
+from db import get_connection
 
-XLSX = 'MASTER_Sunwave_New_PowerQuerry.xlsx'
-
-if not os.path.exists(XLSX):
-    raise SystemExit(f'Source workbook not found: {XLSX}\n'
-                     'Run fetch_excel.py first (requires AZURE_* env vars).')
-
-print(f'[CRM] Loading {XLSX}...')
-xl = pd.ExcelFile(XLSX)
-print(f'[CRM] Sheets in workbook: {xl.sheet_names}')
+conn = get_connection()
+print('[CRM] Connected to SQL database')
 
 
 def safe_str(v):
@@ -38,7 +31,6 @@ def safe_str(v):
 
 
 def fmt_dt(v):
-    """Format a pandas datetime/Timestamp into ISO-like string. Returns ''."""
     if v is None or pd.isna(v):
         return ''
     if hasattr(v, 'isoformat'):
@@ -49,39 +41,10 @@ def fmt_dt(v):
     return safe_str(v)
 
 
-def pick_sheet(*names):
-    """Return DataFrame for the first sheet that exists in the workbook."""
-    for n in names:
-        if n in xl.sheet_names:
-            print(f'  Using sheet: {n!r}')
-            return pd.read_excel(xl, sheet_name=n)
-    print(f'  Warning: none of {names} in workbook')
-    return pd.DataFrame()
-
-
 # ── Process Opportunities ───────────────────────────────────────────────────
-print('[CRM] Loading Opportunity sheet...')
-
-# Diagnostic: inspect ALL opportunity sheets to find the freshest one
-for _sn in ('Opportunities', 'Opportunities by Created Date', 'Opportunities Active', 'Opportunity'):
-    if _sn in xl.sheet_names:
-        try:
-            _df = pd.read_excel(XLSX, sheet_name=_sn)
-            _max = None
-            for _c in ('created_on', 'created on', 'Created On'):
-                if _c in _df.columns:
-                    _d = pd.to_datetime(_df[_c], errors='coerce').max()
-                    _max = _d
-                    break
-            print(f'[CRM-OPP-DIAG] {_sn}: {len(_df)} rows · max created_on = {_max}')
-        except Exception as _e:
-            print(f'[CRM-OPP-DIAG] {_sn}: error {_e}')
-
-# Reorder pick order: try the freshness-maintained sheet FIRST.
-# 'Opportunities by Created Date' is typically a date-sorted recent view
-# in Sunwave Power Query exports.
-odf = pick_sheet('Opportunities by Created Date', 'Opportunities', 'Opportunity', 'Opportunities Active')
-# Coerce date columns
+print('[CRM] Loading Opportunities from SQL...')
+odf = pd.read_sql('SELECT * FROM dbo.vw_excel_opportunities_by_created_date', conn)
+print(f'  {len(odf)} rows from vw_excel_opportunities_by_created_date')
 for c in ('created_on', 'admission_date'):
     if c in odf.columns:
         odf[c] = pd.to_datetime(odf[c], errors='coerce')
@@ -109,8 +72,9 @@ print(f'  Opps: {len(opps)} rows')
 
 
 # ── Process Timeline (activities) ──────────────────────────────────────────
-print('[CRM] Loading Timeline sheet...')
-tdf = pick_sheet('Timeline')
+print('[CRM] Loading Timeline from SQL...')
+tdf = pd.read_sql('SELECT * FROM dbo.vw_excel_timeline', conn)
+print(f'  {len(tdf)} rows from vw_excel_timeline')
 for c in ('activity_date', 'task_due_date', 'reminder_date_time', 'created_on', 'orig_activity_date'):
     if c in tdf.columns:
         tdf[c] = pd.to_datetime(tdf[c], errors='coerce')
@@ -192,6 +156,7 @@ meta = {
     'open_tasks':   sum(1 for t in tasks if t['is_open']),
 }
 
+conn.close()
 
 # ── Build HTML ──────────────────────────────────────────────────────────────
 template_path = 'dashboard_template_crm.html'
@@ -214,12 +179,10 @@ for placeholder, value in replacements.items():
         print(f'Warning: placeholder {placeholder} not found in template')
     html = html.replace(placeholder, value)
 
-# Pre-push checks
 errors = []
 if '/*INJECT_' in html:
     errors.append('Some /*INJECT_*/ placeholders remained unfilled')
 
-# Output
 os.makedirs('crm', exist_ok=True)
 out_path = os.path.join('crm', 'index.html')
 with open(out_path, 'w', encoding='utf-8') as f:

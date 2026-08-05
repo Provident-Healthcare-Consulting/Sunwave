@@ -1,6 +1,11 @@
 import pandas as pd, json, math, os
+from db import get_connection
 
-df = pd.read_excel('MASTER_Sunwave_New_PowerQuerry.xlsx', sheet_name='Payment Report Deposit Date')
+conn = get_connection()
+print('[Billing] Connected to SQL database')
+df = pd.read_sql('SELECT * FROM dbo.vw_excel_payment_report_deposit_date', conn)
+conn.close()
+print(f'[Billing] {len(df)} rows from vw_excel_payment_report_deposit_date')
 
 # Parse dates
 df['deposit_date'] = pd.to_datetime(df['deposit_date'], errors='coerce')
