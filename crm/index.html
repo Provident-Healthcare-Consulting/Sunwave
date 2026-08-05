@@ -416,7 +416,7 @@ var USERS = [];
 var TASKS = [];
 var META  = {};
 
-var API_BASE = 'https://strive-ur-api.azurewebsites.net';
+var API_BASE = 'https://strive-ur-api-gdhbd0htb8ghb8ez.canadacentral-01.azurewebsites.net';
 var _dataReady = fetch(API_BASE + '/api/dashboard/crm')
   .then(function(r) { if (!r.ok) throw new Error('API ' + r.status); return r.json(); })
   .then(function(d) { OPPS = d.opps; ACTS = d.acts; USERS = d.users; TASKS = d.tasks; META = d.meta; })
