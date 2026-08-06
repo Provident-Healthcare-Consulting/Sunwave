@@ -206,6 +206,7 @@ body.locked > *:not(#signin-overlay){visibility:hidden}
   <button class="tnav" data-tab="trends">Activity Trends</button>
   <button class="tnav" data-tab="velocity">Velocity</button>
   <button class="tnav" data-tab="composition">Composition</button>
+  <button class="tnav" data-tab="audit">Audit</button>
 </nav>
 
 <!-- App body: filter rail left + tab content right -->
@@ -273,6 +274,7 @@ body.locked > *:not(#signin-overlay){visibility:hidden}
 <div id="tab-trends"        class="tab-panel"></div>
 <div id="tab-velocity"      class="tab-panel"></div>
 <div id="tab-composition"   class="tab-panel"></div>
+<div id="tab-audit"         class="tab-panel"></div>
 </div><!-- /.tab-content -->
 
 </div><!-- /.app-body -->
@@ -995,6 +997,7 @@ function buildTab(n){
   else if (n === 'trends')        buildTrends();
   else if (n === 'velocity')      buildVelocity();
   else if (n === 'composition')   buildComposition();
+  else if (n === 'audit')          buildAudit();
   // Post-build: definitions panel + download buttons on every card
   appendDefinitions(n);
   attachDownloadButtons(document.getElementById('tab-' + n));
@@ -2931,6 +2934,125 @@ function buildComposition() {
   html += '</div>';
 
   document.getElementById('tab-composition').innerHTML = html;
+}
+
+// ──────────────────────────────────────────────────────────────────
+// AUDIT
+// ──────────────────────────────────────────────────────────────────
+var _auditCache = null;
+
+function buildAudit() {
+  var panel = document.getElementById('tab-audit');
+
+  if (_auditCache) { renderAudit(_auditCache, panel); return; }
+
+  panel.innerHTML = '<div style="padding:40px;text-align:center;color:var(--muted)">Loading audit data…</div>';
+
+  fetch(API_BASE + '/api/dashboard/crm-audit')
+    .then(function(r) { if (!r.ok) throw new Error('API ' + r.status); return r.json(); })
+    .then(function(d) { _auditCache = d; renderAudit(d, panel); })
+    .catch(function(e) { panel.innerHTML = '<div style="padding:40px;text-align:center;color:var(--red)">Failed to load audit data: ' + esc(e.message) + '</div>'; });
+}
+
+function renderAudit(d, panel) {
+  var html = '';
+
+  // ── Sync Summary KPIs ──
+  var oS = d.stats.sunwave_opportunities || {};
+  var tS = d.stats.crm_timeline || {};
+  html += '<div class="kpis">';
+  html += kpi('navy', 'Opportunities', oS.total || 0);
+  html += kpi('purple', 'Timeline Events', tS.total || 0);
+  html += kpi('teal', 'Last Synced (Opps)', oS.last_synced ? new Date(oS.last_synced).toLocaleString() : '—');
+  html += kpi('teal', 'Last Synced (Timeline)', tS.last_synced ? new Date(tS.last_synced).toLocaleString() : '—');
+  html += '</div>';
+
+  // ── Record Date Range ──
+  html += '<div class="g2">';
+
+  html += '<div class="card"><div class="card-h"><div><div class="card-title">sunwave_opportunities — Record Range</div><div class="card-sub">First and last records by created_on date</div></div></div>';
+  html += '<div class="tbl-wrap"><table class="tbl"><thead><tr><th>Metric</th><th>Value</th></tr></thead><tbody>';
+  html += '<tr><td>Total Records</td><td class="num"><strong>' + (oS.total || 0) + '</strong></td></tr>';
+  html += '<tr><td>First Record (created_on)</td><td>' + fmtDt(oS.first_created) + '</td></tr>';
+  html += '<tr><td>Last Record (created_on)</td><td>' + fmtDt(oS.last_created) + '</td></tr>';
+  html += '<tr><td>First Synced At</td><td>' + fmtDt(oS.first_synced) + '</td></tr>';
+  html += '<tr><td>Last Synced At</td><td>' + fmtDt(oS.last_synced) + '</td></tr>';
+  html += '</tbody></table></div></div>';
+
+  html += '<div class="card"><div class="card-h"><div><div class="card-title">crm_timeline — Record Range</div><div class="card-sub">First and last records by created_on date</div></div></div>';
+  html += '<div class="tbl-wrap"><table class="tbl"><thead><tr><th>Metric</th><th>Value</th></tr></thead><tbody>';
+  html += '<tr><td>Total Records</td><td class="num"><strong>' + (tS.total || 0) + '</strong></td></tr>';
+  html += '<tr><td>First Record (created_on)</td><td>' + fmtDt(tS.first_created) + '</td></tr>';
+  html += '<tr><td>Last Record (created_on)</td><td>' + fmtDt(tS.last_created) + '</td></tr>';
+  html += '<tr><td>First Synced At</td><td>' + fmtDt(tS.first_synced) + '</td></tr>';
+  html += '<tr><td>Last Synced At</td><td>' + fmtDt(tS.last_synced) + '</td></tr>';
+  html += '</tbody></table></div></div>';
+
+  html += '</div>';
+
+  // ── Sync Log ──
+  var logs = d.sync_log || [];
+  html += '<div class="card"><div class="card-h"><div><div class="card-title">Sync Log (Recent 50)</div><div class="card-sub">Records synced from Sunwave API into SQL — shows inserts and modifications per run</div></div></div>';
+  html += '<div class="tbl-wrap"><table class="tbl"><thead><tr><th>Synced At</th><th>Endpoint</th><th>Rows</th><th>Status</th><th>From</th><th>Until</th><th>Error</th></tr></thead><tbody>';
+  if (!logs.length) html += '<tr><td colspan="7" class="empty">No sync log entries found.</td></tr>';
+  logs.forEach(function(l) {
+    var cls = l.status === 'success' ? 'b-green' : (l.status === 'error' ? 'b-red' : 'b-amber');
+    html += '<tr>';
+    html += '<td>' + fmtDt(l.synced_at) + '</td>';
+    html += '<td>' + esc(l.endpoint || '') + '</td>';
+    html += '<td class="num">' + (l.row_count || 0) + '</td>';
+    html += '<td><span class="badge ' + cls + '">' + esc(l.status || '') + '</span></td>';
+    html += '<td>' + fmtDt(l.from_date) + '</td>';
+    html += '<td>' + fmtDt(l.until_date) + '</td>';
+    html += '<td style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="' + esc(l.error_message || '') + '">' + esc(l.error_message || '—') + '</td>';
+    html += '</tr>';
+  });
+  html += '</tbody></table></div></div>';
+
+  // ── Table Schema: sunwave_opportunities ──
+  html += '<div class="g2">';
+
+  html += '<div class="card"><div class="card-h"><div><div class="card-title">Schema: sunwave_opportunities</div><div class="card-sub">' + (d.schema.sunwave_opportunities || []).length + ' columns</div></div></div>';
+  html += '<div class="tbl-wrap" style="max-height:400px;overflow-y:auto"><table class="tbl"><thead><tr><th>#</th><th>Column</th><th>Type</th><th>Max Length</th><th>Nullable</th></tr></thead><tbody>';
+  (d.schema.sunwave_opportunities || []).forEach(function(c, i) {
+    html += '<tr><td class="num">' + (i+1) + '</td><td><code>' + esc(c.COLUMN_NAME) + '</code></td><td>' + esc(c.DATA_TYPE) + '</td><td class="num">' + (c.CHARACTER_MAXIMUM_LENGTH || '—') + '</td><td>' + esc(c.IS_NULLABLE) + '</td></tr>';
+  });
+  html += '</tbody></table></div></div>';
+
+  html += '<div class="card"><div class="card-h"><div><div class="card-title">Schema: crm_timeline</div><div class="card-sub">' + (d.schema.crm_timeline || []).length + ' columns</div></div></div>';
+  html += '<div class="tbl-wrap" style="max-height:400px;overflow-y:auto"><table class="tbl"><thead><tr><th>#</th><th>Column</th><th>Type</th><th>Max Length</th><th>Nullable</th></tr></thead><tbody>';
+  (d.schema.crm_timeline || []).forEach(function(c, i) {
+    html += '<tr><td class="num">' + (i+1) + '</td><td><code>' + esc(c.COLUMN_NAME) + '</code></td><td>' + esc(c.DATA_TYPE) + '</td><td class="num">' + (c.CHARACTER_MAXIMUM_LENGTH || '—') + '</td><td>' + esc(c.IS_NULLABLE) + '</td></tr>';
+  });
+  html += '</tbody></table></div></div>';
+
+  html += '</div>';
+
+  // ── Raw Data Sample ──
+  html += '<div class="card"><div class="card-h"><div><div class="card-title">Raw Data Sample — sunwave_opportunities</div><div class="card-sub">First 10 records by created_on (most recent first)</div></div></div>';
+  var sampleOpps = OPPS.slice().sort(function(a,b){ return (pd(b.co)||new Date(0)) - (pd(a.co)||new Date(0)); }).slice(0, 10);
+  html += '<div class="tbl-wrap" style="overflow-x:auto"><table class="tbl"><thead><tr><th>ID</th><th>Name</th><th>Created</th><th>Admit</th><th>Outcome</th><th>Stage</th><th>LOC</th><th>Insurance</th><th>Referral</th><th>Rep</th></tr></thead><tbody>';
+  sampleOpps.forEach(function(o) {
+    html += '<tr><td>' + esc(o.id) + '</td><td>' + esc(o.name) + '</td><td>' + esc(o.co ? o.co.slice(0,10) : '') + '</td><td>' + esc(o.admit ? o.admit.slice(0,10) : '—') + '</td><td>' + esc(o.outcome) + '</td><td>' + esc(o.stage) + '</td><td>' + esc(o.loc || '—') + '</td><td>' + esc(o.ins || '—') + '</td><td>' + esc(o.ref || '—') + '</td><td>' + esc(o.rep || '—') + '</td></tr>';
+  });
+  html += '</tbody></table></div></div>';
+
+  html += '<div class="card"><div class="card-h"><div><div class="card-title">Raw Data Sample — crm_timeline</div><div class="card-sub">First 10 activities by date (most recent first)</div></div></div>';
+  var sampleActs = ACTS.slice().sort(function(a,b){ return (pd(b.date)||new Date(0)) - (pd(a.date)||new Date(0)); }).slice(0, 10);
+  html += '<div class="tbl-wrap" style="overflow-x:auto"><table class="tbl"><thead><tr><th>Opp ID</th><th>Type</th><th>Subject</th><th>Description</th><th>By</th><th>Status</th><th>Date</th><th>Assigned</th></tr></thead><tbody>';
+  sampleActs.forEach(function(a) {
+    html += '<tr><td>' + esc(a.oid) + '</td><td>' + esc(a.type) + '</td><td>' + esc(a.subj || '—') + '</td><td style="max-width:250px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="' + esc(a.text || '') + '">' + esc(a.text ? a.text.slice(0,80) : '—') + '</td><td>' + esc(a.by || '—') + '</td><td>' + esc(a.wf || '—') + '</td><td>' + esc(a.date ? a.date.slice(0,10) : '') + '</td><td>' + esc(a.assigned_to_name || '—') + '</td></tr>';
+  });
+  html += '</tbody></table></div></div>';
+
+  panel.innerHTML = html;
+}
+
+function fmtDt(v) {
+  if (!v) return '—';
+  var d = new Date(v);
+  if (isNaN(d.getTime())) return esc(String(v));
+  return d.toLocaleString();
 }
 
 // ── Initial render — gated by sign-in ─────────────────────────────────────
