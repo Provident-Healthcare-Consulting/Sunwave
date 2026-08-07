@@ -212,6 +212,7 @@ body.locked > *:not(#signin-overlay){visibility:hidden}
   <button class="tnav" data-tab="velocity">Velocity</button>
   <button class="tnav" data-tab="composition">Composition</button>
   <button class="tnav" data-tab="audit">Audit</button>
+  <button class="tnav" data-tab="timeline-dash">Timeline Dashboard</button>
 </nav>
 
 <!-- App body: filter rail left + tab content right -->
@@ -280,6 +281,7 @@ body.locked > *:not(#signin-overlay){visibility:hidden}
 <div id="tab-velocity"      class="tab-panel"></div>
 <div id="tab-composition"   class="tab-panel"></div>
 <div id="tab-audit"         class="tab-panel"></div>
+<div id="tab-timeline-dash" class="tab-panel"></div>
 </div><!-- /.tab-content -->
 
 </div><!-- /.app-body -->
@@ -1005,6 +1007,7 @@ function buildTab(n){
   else if (n === 'velocity')      buildVelocity();
   else if (n === 'composition')   buildComposition();
   else if (n === 'audit')          buildAudit();
+  else if (n === 'timeline-dash')  buildTimelineDash();
   // Post-build: definitions panel + download buttons on every card
   appendDefinitions(n);
   attachDownloadButtons(document.getElementById('tab-' + n));
@@ -3129,6 +3132,154 @@ function fmtDt(v) {
   var d = new Date(v);
   if (isNaN(d.getTime())) return esc(String(v));
   return d.toLocaleString();
+}
+
+// ── TIMELINE DASHBOARD ────────────────────────────────────────────────────
+function buildTimelineDash() {
+  var acts = filteredActs();
+  var panel = document.getElementById('tab-timeline-dash');
+
+  // KPIs
+  var totalActs = acts.length;
+  var oppsTouch = {};
+  var callCount = 0, noteCount = 0, wfCount = 0;
+  var staffSet = {};
+  var typeCounts = {};
+  var monthCounts = {};
+  acts.forEach(function(a) {
+    if (a.oid) oppsTouch[a.oid] = true;
+    var t = a.type || 'Unknown';
+    typeCounts[t] = (typeCounts[t] || 0) + 1;
+    if (t === 'Call') callCount++;
+    if (t === 'Note') noteCount++;
+    if (t === 'Workflow') wfCount++;
+    if (a.by) staffSet[a.by] = (staffSet[a.by] || 0) + 1;
+    var d = pd(a.date);
+    if (d) {
+      var mk = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0');
+      monthCounts[mk] = (monthCounts[mk] || 0) + 1;
+    }
+  });
+  var oppsTouched = Object.keys(oppsTouch).length;
+  var activeStaff = Object.keys(staffSet).length;
+
+  var html = '';
+
+  // KPI row
+  html += '<div class="kpis">';
+  html += '<div class="kpi teal"><div class="kpi-lbl">Total Activities</div><div class="kpi-val">' + totalActs.toLocaleString() + '</div></div>';
+  html += '<div class="kpi blue"><div class="kpi-lbl">Opportunities Touched</div><div class="kpi-val">' + oppsTouched.toLocaleString() + '</div></div>';
+  html += '<div class="kpi green"><div class="kpi-lbl">Calls Logged</div><div class="kpi-val">' + callCount.toLocaleString() + '</div></div>';
+  html += '<div class="kpi purple"><div class="kpi-lbl">Notes Logged</div><div class="kpi-val">' + noteCount.toLocaleString() + '</div></div>';
+  html += '<div class="kpi"><div class="kpi-lbl">Workflow Moves</div><div class="kpi-val">' + wfCount.toLocaleString() + '</div></div>';
+  html += '<div class="kpi amber"><div class="kpi-lbl">Active Staff</div><div class="kpi-val">' + activeStaff.toLocaleString() + '</div></div>';
+  html += '</div>';
+
+  // Section 1: Activities by Type
+  var typeArr = Object.keys(typeCounts).map(function(k) { return { type: k, count: typeCounts[k] }; });
+  typeArr.sort(function(a, b) { return b.count - a.count; });
+  html += '<div class="g2">';
+  html += '<div class="card"><div class="card-h"><div><div class="card-title">1 &middot; Activities by Type</div></div></div>';
+  html += '<div class="tbl-wrap"><table class="tbl"><thead><tr><th>Activity Type</th><th class="num">Count</th><th class="num">% of Total</th></tr></thead><tbody>';
+  typeArr.forEach(function(r) {
+    var pct = totalActs ? (r.count / totalActs * 100).toFixed(1) + '%' : '0%';
+    html += '<tr><td>' + esc(r.type) + '</td><td class="num">' + r.count.toLocaleString() + '</td><td class="num">' + pct + '</td></tr>';
+  });
+  html += '<tr style="font-weight:700;border-top:2px solid var(--border)"><td>Total</td><td class="num">' + totalActs.toLocaleString() + '</td><td class="num">100.0%</td></tr>';
+  html += '</tbody></table></div></div>';
+
+  // Section 1b: Activity Type donut chart
+  html += '<div class="card"><div class="card-h"><div><div class="card-title">Activity Type Mix</div></div></div>';
+  html += '<canvas id="tldash-type-chart" height="280"></canvas></div>';
+  html += '</div>';
+
+  // Section 2: Monthly Activity Trend
+  var monthKeys = Object.keys(monthCounts).sort();
+  html += '<div class="card"><div class="card-h"><div><div class="card-title">2 &middot; Monthly Activity Trend</div></div></div>';
+  html += '<canvas id="tldash-monthly-chart" height="100"></canvas>';
+  html += '<div class="tbl-wrap" style="max-height:400px;margin-top:14px"><table class="tbl"><thead><tr><th>Month</th><th class="num">Activities</th></tr></thead><tbody>';
+  monthKeys.forEach(function(mk) {
+    html += '<tr><td>' + esc(mk) + '</td><td class="num">' + monthCounts[mk].toLocaleString() + '</td></tr>';
+  });
+  html += '</tbody></table></div></div>';
+
+  // Section 3: Staff Activity Volume (Top 15)
+  var staffArr = Object.keys(staffSet).map(function(k) { return { name: k, total: staffSet[k] }; });
+  staffArr.sort(function(a, b) { return b.total - a.total; });
+  var staffCallNotes = {};
+  acts.forEach(function(a) {
+    if (!a.by) return;
+    if (!staffCallNotes[a.by]) staffCallNotes[a.by] = { calls: 0, notes: 0, emails: 0, tasks: 0 };
+    if (a.type === 'Call') staffCallNotes[a.by].calls++;
+    if (a.type === 'Note') staffCallNotes[a.by].notes++;
+    if (a.type === 'Email') staffCallNotes[a.by].emails++;
+    if (a.type === 'Task') staffCallNotes[a.by].tasks++;
+  });
+  var top15 = staffArr.slice(0, 15);
+  var otherTotal = 0;
+  staffArr.slice(15).forEach(function(s) { otherTotal += s.total; });
+
+  html += '<div class="card"><div class="card-h"><div><div class="card-title">3 &middot; Staff Activity Volume (Top 15)</div></div></div>';
+  html += '<div class="g2" style="margin-bottom:0">';
+  // Table
+  html += '<div><div class="tbl-wrap" style="max-height:520px"><table class="tbl"><thead><tr><th></th><th>Staff Member</th><th class="num">Activities</th><th class="num">Calls</th><th class="num">Notes</th><th class="num">Emails</th><th class="num">Tasks</th></tr></thead><tbody>';
+  top15.forEach(function(s, i) {
+    var cn = staffCallNotes[s.name] || { calls: 0, notes: 0, emails: 0, tasks: 0 };
+    var barW = top15[0].total ? Math.round(s.total / top15[0].total * 100) : 0;
+    html += '<tr><td class="num" style="color:var(--muted);font-size:10px">' + (i + 1) + '</td>';
+    html += '<td>' + esc(s.name) + '</td>';
+    html += '<td class="num"><div class="mbar"><div class="mbar-fill" style="width:' + barW + '%"></div></div>' + s.total.toLocaleString() + '</td>';
+    html += '<td class="num">' + cn.calls + '</td>';
+    html += '<td class="num">' + cn.notes + '</td>';
+    html += '<td class="num">' + cn.emails + '</td>';
+    html += '<td class="num">' + cn.tasks + '</td></tr>';
+  });
+  if (otherTotal) {
+    html += '<tr style="font-style:italic;color:var(--muted)"><td></td><td>All other staff</td><td class="num">' + otherTotal.toLocaleString() + '</td><td colspan="4"></td></tr>';
+  }
+  html += '</tbody></table></div></div>';
+  // Bar chart
+  html += '<div><canvas id="tldash-staff-chart" height="380"></canvas></div>';
+  html += '</div></div>';
+
+  panel.innerHTML = html;
+
+  // Render charts
+  var typeColors = ['#0a3d5c','#3b82f6','#10b981','#f59e0b','#8b5cf6','#ef4444','#ec4899','#64748b','#06b6d4'];
+  destroyChart('tldash-type-chart');
+  CHARTS['tldash-type-chart'] = new Chart(document.getElementById('tldash-type-chart'), {
+    type: 'doughnut',
+    data: {
+      labels: typeArr.map(function(r) { return r.type; }),
+      datasets: [{ data: typeArr.map(function(r) { return r.count; }), backgroundColor: typeColors.slice(0, typeArr.length), borderWidth: 0 }]
+    },
+    options: { responsive: true, plugins: { legend: { position: 'right', labels: { font: { family: "'Space Mono', monospace", size: 10 }, padding: 10 } } } }
+  });
+
+  destroyChart('tldash-monthly-chart');
+  CHARTS['tldash-monthly-chart'] = new Chart(document.getElementById('tldash-monthly-chart'), {
+    type: 'bar',
+    data: {
+      labels: monthKeys,
+      datasets: [{ label: 'Activities', data: monthKeys.map(function(k) { return monthCounts[k]; }), backgroundColor: 'rgba(10,61,92,0.75)', borderRadius: 4 }]
+    },
+    options: { responsive: true, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true, ticks: { font: { family: "'Space Mono', monospace", size: 10 } } }, x: { ticks: { font: { family: "'Space Mono', monospace", size: 10 } } } } }
+  });
+
+  destroyChart('tldash-staff-chart');
+  CHARTS['tldash-staff-chart'] = new Chart(document.getElementById('tldash-staff-chart'), {
+    type: 'bar',
+    data: {
+      labels: top15.map(function(s) { return s.name.split(' ')[0]; }),
+      datasets: [
+        { label: 'Calls', data: top15.map(function(s) { return (staffCallNotes[s.name] || {}).calls || 0; }), backgroundColor: '#3b82f6' },
+        { label: 'Notes', data: top15.map(function(s) { return (staffCallNotes[s.name] || {}).notes || 0; }), backgroundColor: '#10b981' },
+        { label: 'Emails', data: top15.map(function(s) { return (staffCallNotes[s.name] || {}).emails || 0; }), backgroundColor: '#8b5cf6' },
+        { label: 'Tasks', data: top15.map(function(s) { return (staffCallNotes[s.name] || {}).tasks || 0; }), backgroundColor: '#f59e0b' }
+      ]
+    },
+    options: { indexAxis: 'y', responsive: true, plugins: { legend: { labels: { font: { family: "'Space Mono', monospace", size: 10 } } } }, scales: { x: { stacked: true, ticks: { font: { family: "'Space Mono', monospace", size: 10 } } }, y: { stacked: true, ticks: { font: { family: "'Space Mono', monospace", size: 10 } } } } }
+  });
 }
 
 // ── Initial render — gated by sign-in ─────────────────────────────────────
