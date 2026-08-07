@@ -117,6 +117,11 @@ body{background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif;min
 /* Timeline expand row */
 .tl-detail{padding:14px 20px;background:#f8fafc;border-left:3px solid var(--navy);border-radius:0 6px 6px 0;margin:6px 0}
 .tl-event{padding:8px 0;border-bottom:1px dashed var(--border);font-size:12px}
+/* Dashboard loading overlay */
+.dash-loading{display:flex;flex-direction:column;align-items:center;justify-content:center;padding:120px 20px;gap:18px}
+.dash-loading .dl-spin{width:36px;height:36px;border:3px solid var(--border);border-top-color:var(--navy);border-radius:50%;animation:dlspin .8s linear infinite}
+@keyframes dlspin{to{transform:rotate(360deg)}}
+.dash-loading .dl-label{font-family:'Space Mono',monospace;font-size:12px;color:var(--muted);letter-spacing:.06em}
 .tl-event:last-child{border-bottom:none}
 .tl-date{font-family:'Space Mono',monospace;font-size:10px;color:var(--muted);margin-right:10px}
 .tl-type{display:inline-block;padding:1px 6px;border-radius:3px;font-size:10px;font-weight:700;background:var(--teal-dim);color:var(--navy);margin-right:8px;font-family:'Space Mono',monospace}
@@ -419,9 +424,11 @@ var TASKS = [];
 var META  = {};
 
 var API_BASE = 'https://strive-ur-api-gdhbd0htb8ghb8ez.canadacentral-01.azurewebsites.net';
+var _dataLoaded = false;
+var _dashBooted = false;
 var _dataReady = fetch(API_BASE + '/api/dashboard/crm')
   .then(function(r) { if (!r.ok) throw new Error('API ' + r.status); return r.json(); })
-  .then(function(d) { OPPS = d.opps; ACTS = d.acts; USERS = d.users; TASKS = d.tasks; META = d.meta; })
+  .then(function(d) { OPPS = d.opps; ACTS = d.acts; USERS = d.users; TASKS = d.tasks; META = d.meta; _dataLoaded = true; })
   .catch(function(e) { console.error('Failed to load CRM data:', e); })
   .then(function() { if (typeof _onDataReady === 'function') _onDataReady(); });
 // CTM call counts per user, per time bucket.
@@ -1113,7 +1120,8 @@ document.getElementById('btnDownloadAll').onclick = function() {
 
 function rebuildAll() {
   Object.keys(CHARTS).forEach(destroyChart);
-  _openTaskOidsCache = null;  // task set may have changed implicitly with new TASKS data
+  _openTaskOidsCache = null;
+  reindexActsByOid();
   var active = document.querySelector('.tnav.active');
   if (active) buildTab(active.dataset.tab);
 }
@@ -1136,6 +1144,7 @@ function _populateUI() {
 }
 
 function _onDataReady() {
+  if (!_dashBooted) return;
   _populateUI();
   rebuildAll();
 }
@@ -2233,20 +2242,21 @@ function buildEffectiveness() {
 // ──────────────────────────────────────────────────────────────────
 var FLOW_EXPANDED = {};   // oid → true if expanded
 // Pre-index timeline by opportunity_id for O(1) lookup
-var ACTS_BY_OID = (function(){
+var ACTS_BY_OID = {};
+function reindexActsByOid() {
   var m = {};
   for (var i = 0; i < ACTS.length; i++) {
     var oid = ACTS[i].oid;
     if (!oid) continue;
-    if (!m[oid]) m[oid] = [];
-    m[oid].push(ACTS[i]);
+    var key = String(oid);
+    if (!m[key]) m[key] = [];
+    m[key].push(ACTS[i]);
   }
-  // Sort each opp's events oldest→newest (chronological)
   Object.keys(m).forEach(function(k){
     m[k].sort(function(a,b){ return (pd(a.date)||new Date(0)) - (pd(b.date)||new Date(0)); });
   });
-  return m;
-})();
+  ACTS_BY_OID = m;
+}
 
 function buildFlow() {
   var oppsAll = filteredOpps();
@@ -2285,7 +2295,7 @@ function renderFlowList() {
   list.slice(0, 200).forEach(function(o, i){
     var oc = o.outcome || '';
     var ocCls = isAdmitted(o) ? 'b-green' : (isLost(o) ? 'b-red' : 'b-blue');
-    var events = ACTS_BY_OID[o.id] || [];
+    var events = ACTS_BY_OID[String(o.id)] || [];
     var open = !!FLOW_EXPANDED[o.id];
     var arrow = open ? '&#9660;' : '&#9658;';
     var rowOnClick = 'toggleFlow(' + i + ',' + JSON.stringify(o.id) + ')';
@@ -2327,7 +2337,7 @@ function toggleFlow(idx, oid) {
 }
 
 function renderFlowTimeline(oid) {
-  var events = (ACTS_BY_OID[oid] || []).slice();
+  var events = (ACTS_BY_OID[String(oid)] || []).slice();
   if (!events.length) {
     return '<div class="tl-detail"><div class="empty" style="padding:18px">No timeline events for this opportunity.</div></div>';
   }
@@ -3123,9 +3133,16 @@ function fmtDt(v) {
 
 // ── Initial render — gated by sign-in ─────────────────────────────────────
 function bootstrapDashboard() {
-  // Called by enterDashboard() once the user has authenticated against the
-  // Provident tenant. Defers all data-bound rendering until then.
-  buildOverview();
+  _dashBooted = true;
+  if (_dataLoaded) {
+    reindexActsByOid();
+    _populateUI();
+    buildOverview();
+  } else {
+    var panel = document.getElementById('tab-overview');
+    panel.innerHTML = '<div class="dash-loading"><div class="dl-spin"></div><div class="dl-label">Loading dashboard data…</div></div>';
+    panel.classList.add('active');
+  }
 }
 </script>
 </body>
